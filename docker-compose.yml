@@ -1,0 +1,77 @@
+# Local stack: API, Postgres, Redis, a Celery worker and its beat scheduler.
+#
+# `make up` brings this online and seeds a demo dataset, which is the fastest
+# path from a clone to reports with real numbers in them.
+
+name: nuvix
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nuvix
+      POSTGRES_PASSWORD: nuvix
+      POSTGRES_DB: nuvix
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nuvix"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000
+             --workers 3 --threads 2 --access-logfile -"
+    environment: &django_env
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      DJANGO_SECRET_KEY: local-development-key-not-for-production-use
+      DJANGO_DEBUG: "false"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,api
+      SECURE_SSL_REDIRECT: "false"
+      DATABASE_URL: postgres://nuvix:nuvix@db:5432/nuvix
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      REDIS_CACHE_URL: redis://redis:6379/2
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: celery -A config worker --loglevel=info --concurrency=2
+    environment: *django_env
+    depends_on:
+      - api
+      - redis
+
+  beat:
+    build: .
+    command: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment: *django_env
+    depends_on:
+      - api
+      - redis
+
+volumes:
+  pgdata:
