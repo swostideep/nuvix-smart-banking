@@ -53,6 +53,15 @@ class LinkedAccountSerializer(serializers.ModelSerializer):
 
 
 class TransactionSerializer(serializers.ModelSerializer):
+    #: Declared explicitly because the partial UniqueConstraint on
+    #: ``(account, external_id)`` makes DRF derive a unique-together validator,
+    #: and that in turn marks the field required. It is not: a manually entered
+    #: transaction has no aggregator id, and the database constraint is already
+    #: scoped to rows where one is present.
+    external_id = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=64
+    )
+
     class Meta:
         model = Transaction
         fields = (
