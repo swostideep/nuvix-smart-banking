@@ -12,7 +12,10 @@ from nuvix.banking.views import (
 
 app_name = "banking"
 
-router = DefaultRouter()
+# trailing_slash=False so router routes match the hand-written paths in
+# this file. A single API that answers on /debt/debts/ but /debt/plans
+# forces every client to remember which is which.
+router = DefaultRouter(trailing_slash=False)
 router.register("accounts", LinkedAccountViewSet, basename="linked-account")
 router.register("transactions", TransactionViewSet, basename="transaction")
 
