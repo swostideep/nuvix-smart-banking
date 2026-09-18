@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+build/
+dist/
+
+# Environments
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+
+# Testing
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.ruff_cache/
+
+# Model artifacts -- trained locally, not version controlled.
+# See scripts/train_models.py and models/README.md.
+models/*.joblib
+models/*.pkl
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Generated model metadata (produced by scripts/train_models.py)
+models/*.json
+!models/README.md
+
+# Datasets are not redistributed here -- see models/README.md
+data/*.csv
