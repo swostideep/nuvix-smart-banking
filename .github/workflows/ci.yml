@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install ruff==0.8.6
+      - run: ruff check .
+      - run: ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Run tests
+        run: pytest --cov=nuvix --cov-report=term-missing
+      - name: Fail if migrations are missing
+        run: python manage.py makemigrations --check --dry-run
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.test
+      - name: Fail if the OpenAPI schema does not generate cleanly
+        run: python manage.py spectacular --file /dev/null --fail-on-warn
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.test
+
+  # The suite runs on SQLite for speed. This job re-runs it on Postgres, which
+  # is what production uses -- the raw analytics SQL is the part most likely to
+  # behave differently between the two, so it is worth the extra minute.
+  test-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: nuvix
+          POSTGRES_PASSWORD: nuvix
+          POSTGRES_DB: nuvix_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: pytest
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.ci_postgres
+          DATABASE_URL: postgres://nuvix:nuvix@localhost:5432/nuvix_test
+
+  # The API is designed to run with no ML stack installed, so the main suite
+  # skips the fitted-model tests. This job installs the optional stack and
+  # exercises that path, including a real train -> persist -> serve round trip.
+  test-ml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt -r requirements-ml.txt
+      - name: Run the credit suite with fitted models available
+        run: pytest nuvix/credit -q -rs | tee result.txt
+      - name: Assert the fitted-model tests actually ran
+        run: |
+          if grep -q skipped result.txt; then
+            echo "::error::Tests skipped in the ML job - the optional stack did not install."
+            exit 1
+          fi
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
