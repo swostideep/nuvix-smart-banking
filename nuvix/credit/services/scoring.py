@@ -87,7 +87,12 @@ def rescore(user: User, captured_on: dt.date | None = None) -> ScoreBreakdown:
     profile = get_or_create_profile(user)
     breakdown = score_profile(profile.to_inputs())
 
-    previous_score = profile.score
+    # A profile that has never been scored carries the model floor (300) as a
+    # placeholder, not a previous score. Treating it as one reports the very
+    # first scoring as a ~350-point jump, and the communications engine
+    # cheerfully tells a brand-new user their score "moved up 347 points".
+    first_scoring = profile.last_scored_at is None
+    previous_score = breakdown.score if first_scoring else profile.score
     profile.score = breakdown.score
     profile.band = breakdown.band
     profile.factors = [factor_to_json(factor) for factor in breakdown.factors]

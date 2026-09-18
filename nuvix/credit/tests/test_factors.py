@@ -221,3 +221,51 @@ class TestBands:
     )
     def test_band_boundaries(self, score, expected):
         assert band_for(score) == expected
+
+
+@pytest.mark.django_db
+class TestFirstScoring:
+    """The first score is a baseline, not a movement.
+
+    Regression cover for a bug found by running the app: a never-scored
+    profile carries 300 as a placeholder, and subtracting it reported the
+    initial scoring as a ~350-point jump. The communications engine then told
+    brand-new users their score had "moved up 347 points".
+    """
+
+    def test_the_first_snapshot_has_no_delta(self, user, credit_profile):
+        from nuvix.credit.models import ScoreSnapshot
+        from nuvix.credit.services import scoring
+
+        scoring.rescore(user)
+        snapshot = ScoreSnapshot.objects.get(user=user)
+        assert snapshot.score > 300
+        assert snapshot.delta == 0
+
+    def test_a_later_move_does_report_a_delta(self, user, credit_profile):
+        from decimal import Decimal
+
+        from nuvix.credit.models import ScoreSnapshot
+        from nuvix.credit.services import scoring
+
+        first = scoring.rescore(user)
+
+        credit_profile.refresh_from_db()
+        credit_profile.total_balance = Decimal("200.00")
+        credit_profile.max_single_card_utilization = Decimal("0.0300")
+        credit_profile.save()
+        second = scoring.rescore(user)
+
+        assert second.score > first.score
+        latest = ScoreSnapshot.objects.filter(user=user).order_by("-captured_on").first()
+        assert latest.delta != 0
+
+    def test_a_new_user_gets_no_score_movement_nudge(self, user, credit_profile):
+        """The end-to-end symptom: the trigger must stay quiet on day one."""
+
+        from nuvix.comms.models import TriggerType
+        from nuvix.comms.services import triggers
+        from nuvix.credit.services import scoring
+
+        scoring.rescore(user)
+        assert triggers.evaluate(TriggerType.SCORE_CHANGED, user, {"min_delta": 8}) is None

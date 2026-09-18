@@ -275,6 +275,7 @@ each of these has a regression test:
 | `safe_divide` did not parenthesise its arguments | `SUM(a) + SUM(b)` over `spend` bound the division to `SUM(b)` alone. ROAS reported **1535.20** where the true ratio was **0.56** — the query ran, returned a plausible number, and was simply wrong. Caught by checking a README table against a live run. |
 | Token bucket divided by zero at capacity 0 | Capacity 0 is the legitimate way to disable a channel. |
 | Funnel reported negative drop-offs and >100% conversion | An un-instrumented step read as zero, so the next step "gained" users. |
+| The first-ever score was reported as a **+347 point jump** | A never-scored profile carries the model floor (300) as a placeholder, not a previous score. The communications engine cheerfully told brand-new users their score had "moved up 347 points". Found by running the app, not by a test. |
 | A profile with no credit history scored 624 | It inherited full marks for a payment record it did not have — and every downstream decision built on that number was wrong. |
 | `interest_saved` went **negative** for the worst possible debt book | A baseline that never amortises stops early, so its interest is a partial sum. Subtracting it reported a negative saving for the users who need the plan most. |
 
