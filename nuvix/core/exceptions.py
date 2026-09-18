@@ -82,8 +82,14 @@ def nuvix_exception_handler(exc: Exception, context: dict[str, Any]) -> Response
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
-    code = getattr(exc, "default_code", "error")
+    # The per-raise code, not the class default. DRF stores the ``code=``
+    # argument on the ErrorDetail rather than on the exception, so reading
+    # ``default_code`` would collapse every DomainError subclass down to
+    # "domain_error" and make the specific codes clients switch on useless.
     detail = response.data
+    code = getattr(getattr(exc, "detail", None), "code", None) or getattr(
+        exc, "default_code", "error"
+    )
 
     if isinstance(exc, Http404):
         code, message, details = "not_found", "Resource not found.", {}
