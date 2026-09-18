@@ -1,0 +1,36 @@
+"""Object-level permissions.
+
+The single most important invariant in a consumer-finance backend: a user may
+only ever read or write their own financial records.
+"""
+
+from __future__ import annotations
+
+from rest_framework import permissions
+from rest_framework.request import Request
+from rest_framework.views import APIView
+
+
+class IsOwner(permissions.BasePermission):
+    """Grant access only when the object belongs to the requesting user.
+
+    Views are still expected to scope their queryset by user; this is the
+    second line of defence for detail routes.
+    """
+
+    message = "You do not have access to this record."
+
+    def has_object_permission(self, request: Request, view: APIView, obj: object) -> bool:
+        owner = getattr(obj, "user", None)
+        if owner is None:
+            owner = obj if hasattr(obj, "is_authenticated") else None
+        return owner == request.user
+
+
+class IsStaffOrReadOnly(permissions.BasePermission):
+    """Partner catalogue is world-readable to authenticated users, staff-writable."""
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if request.method in permissions.SAFE_METHODS:
+            return bool(request.user and request.user.is_authenticated)
+        return bool(request.user and request.user.is_staff)
