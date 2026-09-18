@@ -1,0 +1,21 @@
+# --- Core framework ---
+Django==5.1.6
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.4.0
+django-filter==24.3
+django-cors-headers==4.6.0
+drf-spectacular==0.28.0
+
+# --- Data layer ---
+psycopg[binary]==3.2.3
+dj-database-url==2.3.0
+
+# --- Async / scheduling ---
+celery==5.4.0
+redis==5.2.1
+django-celery-beat==2.7.0
+
+# --- Runtime ---
+gunicorn==23.0.0
+python-dotenv==1.0.1
+whitenoise==6.8.2
