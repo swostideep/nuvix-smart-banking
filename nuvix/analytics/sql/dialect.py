@@ -114,9 +114,15 @@ class Dialect:
         explicitly: a channel with zero spend is a real row in a marketing
         report, and it must not take the whole query down.
 
+        **Both arguments are parenthesised**, and that is not cosmetic. Without
+        it, a compound numerator such as ``SUM(a) + SUM(b)`` renders as
+        ``SUM(a) + SUM(b) * 1.0 / NULLIF(d, 0)``, and SQL precedence binds the
+        division to ``SUM(b)`` alone. The query still runs and still returns a
+        plausible number -- it is simply the wrong one, which is the worst way
+        for a reporting bug to behave.
         """
 
-        return f"({numerator} * 1.0 / NULLIF({denominator}, 0))"
+        return f"(({numerator}) * 1.0 / NULLIF(({denominator}), 0))"
 
     def cast_numeric(self, expression: str) -> str:
         if self.vendor == "postgresql":
